@@ -1,0 +1,22 @@
+{
+  "name": "api-tests",
+  "version": "1.0.0",
+  "description": "Playwright tests for REST API",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "playwright:install": "playwright install"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.40.0",
+    "axios": "^1.6.0",
+    "chai": "^4.3.10"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.9",
+    "@types/node": "^20.8.10",
+    "typescript": "^5.2.2"
+  }
+}
