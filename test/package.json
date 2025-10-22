@@ -16,7 +16,9 @@
   },
   "devDependencies": {
     "@types/chai": "^4.3.9",
-    "@types/node": "^20.8.10",
-    "typescript": "^5.2.2"
+    "@types/node": "^20.19.23",
+    "@types/wait-on": "^5.3.4",
+    "typescript": "^5.2.2",
+    "wait-on": "^9.0.1"
   }
 }
