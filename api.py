@@ -1,6 +1,6 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from flask_sqlalchemy import SQLAlchemy
-from flask_restful import Resource, Api, reqparse, abort, fields, marshal_with
+from flask_restful import Resource, Api, reqparse, abort, fields, marshal_with, marshal
 from flask_swagger_ui import get_swaggerui_blueprint
 
 app = Flask(__name__)
@@ -16,16 +16,38 @@ def init_db():
 
 class UserModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
     status = db.Column(db.Boolean, nullable=False, default=True)
+    
+    __table_args__ = (
+        db.Index('ix_user_model_username_status', 'username', 'status', unique=True),
+        db.Index('ix_user_model_email_status', 'email', 'status', unique=True),
+    )
 
     def __repr__(self):
         return f"User(name = {self.username}', email = '{self.email}'. status = '{self.status}')"
     
+def validate_length(value, field_name, max_length):
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    if len(value) > max_length:
+        raise ValueError(f"String length exceeds maximum allowed length of {max_length} for {field_name}")
+    return value
+
+def validate_username(username):
+    if not username:
+        raise ValueError("Username is required")
+    return validate_length(username, "username", 80)
+
+def validate_email(email):
+    if not email:
+        raise ValueError("Email is required")
+    return validate_length(email, "email", 120)
+
 user_arguments = reqparse.RequestParser()
-user_arguments.add_argument("username", type=str, help="Username is required", required=True)
-user_arguments.add_argument("email", type=str, help="Email is required", required=True)
+user_arguments.add_argument("username", type=validate_username, help="Username is required and must not exceed 80 characters", required=True)
+user_arguments.add_argument("email", type=validate_email, help="Email is required and must not exceed 120 characters", required=True)
 userFields = {
     'id': fields.Integer,
     'username': fields.String,
@@ -38,35 +60,63 @@ class Users(Resource):
     def get(self):
         users = UserModel.query.filter_by(status=True).all()
         return users, 200
-    @marshal_with(userFields)
     def post(self):
-        args = user_arguments.parse_args()
-        print(f"Creating user with args: {args}")
-        
-        # Check if user already exists
-        existing_user = UserModel.query.filter_by(username=args['username']).first()
-        if existing_user and existing_user.status:
-            print(f"Username {args['username']} already exists")
-            abort(400, message=f"Username {args['username']} already exists")
+        try:
+            if not request.is_json:
+                return {'message': 'Invalid JSON payload'}, 400
+
+            try:
+                json_data = request.get_json()
+            except Exception:
+                return {'message': 'Invalid JSON payload'}, 400
+                
+            if not json_data:
+                return {'message': 'Invalid JSON payload'}, 400
+
+            errors = {}
+            if 'username' not in json_data:
+                errors['username'] = "Username is required"
+            if 'email' not in json_data:
+                errors['email'] = "Email is required"
             
-        existing_email = UserModel.query.filter_by(email=args['email']).first()
-        if existing_email and existing_email.status:
+            if errors:
+                return {'message': errors}, 400
+            
+            if len(json_data.get('username', '')) > 80:
+                return {'message': 'String length exceeds maximum allowed length of 80 for username'}, 400
+                
+            if len(json_data.get('email', '')) > 120:
+                return {'message': 'String length exceeds maximum allowed length of 120 for email'}, 400
+            
+            args = user_arguments.parse_args(strict=True)
+            print(f"Creating user with args: {args}")
+        except Exception as e:
+            error_msg = str(e)
+            if "required" in error_msg.lower():
+                return {'message': 'Missing required field'}, 400
+            return {'message': error_msg}, 400
+            
+        # Check if user already exists and is active
+        existing_user = UserModel.query.filter_by(username=args['username'], status=True).first()
+        if existing_user:
+            print(f"Username {args['username']} already exists")
+            return {'message': f"Username {args['username']} already exists"}, 400
+            
+        existing_email = UserModel.query.filter_by(email=args['email'], status=True).first()
+        if existing_email:
             print(f"Email {args['email']} already exists")
-            abort(400, message=f"Email {args['email']} already exists")
+            return {'message': f"Email {args['email']} already exists"}, 400
         
         try:
             user = UserModel(username=args['username'], email=args['email'])
             user.status = True
             db.session.add(user)
             db.session.commit()
-            
-            users = UserModel.query.filter_by(status=True).all()
-            print(f"Successfully created user, returning {len(users)} users")
-            return users, 201
+            return marshal(user, userFields), 201
         except Exception as e:
             print(f"Error creating user: {str(e)}")
             db.session.rollback()
-            abort(500, message=f"Internal server error: {str(e)}")
+            return {'message': f"Internal server error: {str(e)}"}, 500
     
 class User(Resource):
     @marshal_with(userFields)

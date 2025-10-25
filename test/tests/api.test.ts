@@ -150,9 +150,10 @@ test.describe('User API Tests', () => {
     });
     
     expect(response.status).toBe(201);
-    expect(Array.isArray(response.data)).toBeTruthy();
-    expect(response.data[0]).toBeDefined();
-    userId = response.data[0].id;
+    expect(response.data).toBeDefined();
+    expect(response.data.username).toBe(testUsername);
+    expect(response.data.email).toBe(testEmail);
+    userId = response.data.id;
     console.log('Created user with ID:', userId);
 
     // 2. Get all users
@@ -215,6 +216,8 @@ test.describe('User API Tests', () => {
       email
     });
     expect(response.status).toBe(201);
+    expect(response.data.username).toBe(username);
+    expect(response.data.email).toBe(email);
     
     // Try to create another user with same username and email
     try {
@@ -229,7 +232,7 @@ test.describe('User API Tests', () => {
     }
 
     // Clean up
-    const userId = response.data[0].id;
+    const userId = response.data.id;
     await axios.delete(`${API_URL}/${userId}`);
   });
 });
